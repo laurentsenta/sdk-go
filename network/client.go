@@ -33,9 +33,13 @@ func NewClient(syncClient sync.Client, runenv *runtime.RunEnv) *Client {
 
 // WaitNetworkInitialized waits for the sidecar to initialize the network, if
 // the sidecar is enabled. If not, it returns immediately.
+// TODO: if there is no sidecar we just ignore the initialization, sounds error-prone
 func (c *Client) WaitNetworkInitialized(ctx context.Context) error {
+	// NOTE: Start event => network initialized
+	// NOTE: Should we use enums and const because these looks like magic values that should be shared accross implementations.
 	se := &runtime.Event{StageStartEvent: &runtime.StageStartEvent{
-		Name:        "network-initialized",
+		Name: "network-initialized",
+		// NOTE: Note the group id here => maybe we only wait for instances in the same group.
 		TestGroupID: c.runenv.TestGroupID,
 	}}
 	if err := c.syncClient.SignalEvent(ctx, se); err != nil {
@@ -43,6 +47,9 @@ func (c *Client) WaitNetworkInitialized(ctx context.Context) error {
 	}
 
 	if c.runenv.TestSidecar {
+		// NOTE: this is where we want for network initialized.
+		// I don't like that we skip this if there is no sidecar, silently.
+		// But it does looks like we wait for network-initialized for EVERY instance in the test.
 		err := <-c.syncClient.MustBarrier(ctx, "network-initialized", c.runenv.TestInstanceCount).C
 		if err != nil {
 			c.runenv.RecordMessage(InitialisationFailed)
@@ -51,6 +58,7 @@ func (c *Client) WaitNetworkInitialized(ctx context.Context) error {
 	}
 	c.runenv.RecordMessage(InitialisationSuccessful)
 
+	// NOTE: End event => network initialized
 	ee := &runtime.Event{StageEndEvent: &runtime.StageEndEvent{
 		Name:        "network-initialized",
 		TestGroupID: c.runenv.TestGroupID,
