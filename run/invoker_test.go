@@ -54,6 +54,67 @@ func TestInitializedInvoke(t *testing.T) {
 	Invoke(test)
 	Invoke(test)
 	Invoke(test)
+
+	client := InitSyncClientFactory(nil, nil).(*sync.InmemClient)
+
+	bytes, err := client.DumpIO()
+
+	if err == nil {
+		t.Log(string(bytes))
+	} else {
+		t.Fail()
+	}
+}
+
+func TestInitializedPayload(t *testing.T) {
+	// nextGlobalSeq := 0
+	// nextGroupSeq := make(map[string]int, 2)
+
+	var test InitializedTestCaseFn = func(env *runtime.RunEnv, initCtx *InitContext) error {
+		// the test case performs asserts on the RunEnv and InitContext.
+		// require.NotNil(t, env)
+		// require.NotNil(t, initCtx)
+		// require.NotNil(t, initCtx.SyncClient)
+		// require.NotNil(t, initCtx.NetClient)
+
+		// // keep track of the expected seq numbers.
+		// nextGlobalSeq++
+		// nextGroupSeq[env.TestGroupID] = nextGroupSeq[env.TestGroupID] + 1
+
+		// require.EqualValues(t, int64(nextGlobalSeq), initCtx.GlobalSeq)
+		// require.EqualValues(t, int64(nextGroupSeq[env.TestGroupID]), initCtx.GroupSeq)
+		return nil
+	}
+
+	env, cleanup := runtime.RandomTestRunEnv(t)
+	env.TestSidecar = true
+	env.TestInstanceCount = 1
+	env.TestGroupInstanceCount = 1
+	t.Cleanup(cleanup)
+
+	for k, v := range env.ToEnvVars() {
+		_ = os.Setenv(k, v)
+	}
+
+	client := InitSyncClientFactory(nil, nil).(*sync.InmemClient)
+
+	func() {
+		// Imitate sidecar.
+		time.Sleep(500 * time.Millisecond)
+		client.SignalEntry(nil, "network-initialized")
+	}()
+
+	// we simulate starting many instances by calling invoke multiple times.
+	// all invocations are backed by the same inmem sync service instance.
+	Invoke(test)
+
+	bytes, err := client.DumpIO()
+
+	if err == nil {
+		t.Log(string(bytes))
+	} else {
+		t.Fail()
+	}
 }
 
 func TestUninitializedInvoke(t *testing.T) {

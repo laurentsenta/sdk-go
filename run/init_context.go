@@ -41,16 +41,19 @@ type InitContext struct {
 
 // init can be safely invoked on a nil reference.
 func (ic *InitContext) init(runenv *runtime.RunEnv) {
+	fmt.Println("1")
 	var (
 		grpstate  = sync.State(fmt.Sprintf(StateInitializedGroupFmt, runenv.TestGroupID))
 		client    = InitSyncClientFactory(context.Background(), runenv)
 		netclient = network.NewClient(client, runenv)
 	)
 
+	fmt.Println("2")
 	runenv.RecordMessage("waiting for network to initialize")
 	netclient.MustWaitNetworkInitialized(context.Background())
 	runenv.RecordMessage("network initialization complete")
 
+	fmt.Println("3")
 	*ic = InitContext{
 		SyncClient: client,
 		NetClient:  netclient,
@@ -59,8 +62,10 @@ func (ic *InitContext) init(runenv *runtime.RunEnv) {
 		runenv:     runenv,
 	}
 
+	fmt.Println("4")
 	runenv.AttachSyncClient(client)
 
+	fmt.Println("5")
 	runenv.RecordMessage("claimed sequence numbers; global=%d, group(%s)=%d", ic.GlobalSeq, runenv.TestGroupID, ic.GroupSeq)
 }
 

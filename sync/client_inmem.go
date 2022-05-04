@@ -2,13 +2,19 @@ package sync
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"sync"
 
 	"github.com/testground/sdk-go/runtime"
 )
 
-type inmemClient struct {
+type Operation struct {
+	Kind    string      `json:"kind"`
+	Payload interface{} `json:"payload"`
+}
+
+type InmemClient struct {
 	sync.Mutex
 	*sugarOperations
 
@@ -16,24 +22,36 @@ type inmemClient struct {
 	barriers      map[State][]*Barrier
 	subscriptions map[string][]reflect.Value
 	published     map[string][]interface{}
+
+	operations []Operation
 }
 
 // NewInmemClient creates an in-memory sync client for testing.
-func NewInmemClient() *inmemClient {
-	c := &inmemClient{
+func NewInmemClient() *InmemClient {
+	c := &InmemClient{
 		states:        make(map[State]int),
 		barriers:      make(map[State][]*Barrier),
 		subscriptions: make(map[string][]reflect.Value),
 		published:     make(map[string][]interface{}),
 	}
 	c.sugarOperations = &sugarOperations{c}
+	c.operations = make([]Operation, 0, 10)
+
 	return c
 }
 
 // Elemental operations
 // ====================
 
-func (i *inmemClient) Publish(_ context.Context, topic *Topic, payload interface{}) (seq int64, err error) {
+func (i *InmemClient) Publish(_ context.Context, topic *Topic, payload interface{}) (seq int64, err error) {
+	i.operations = append(i.operations, Operation{Kind: "publish", Payload: struct {
+		Topic   string      `json:"topic"`
+		Payload interface{} `json:"payload"`
+	}{
+		Topic:   topic.name,
+		Payload: payload,
+	}})
+
 	i.Lock()
 	defer i.Unlock()
 
@@ -51,7 +69,17 @@ func (i *inmemClient) Publish(_ context.Context, topic *Topic, payload interface
 	return int64(len(p)), nil
 }
 
-func (i *inmemClient) Subscribe(_ context.Context, topic *Topic, ch interface{}) (*Subscription, error) {
+func (i *InmemClient) DumpIO() ([]byte, error) {
+	return json.MarshalIndent(i.operations, "", "  ")
+}
+
+func (i *InmemClient) Subscribe(_ context.Context, topic *Topic, ch interface{}) (*Subscription, error) {
+	i.operations = append(i.operations, Operation{Kind: "subscribe", Payload: struct {
+		Topic string `json:"topic"`
+	}{
+		Topic: topic.name,
+	}})
+
 	i.Lock()
 	defer i.Unlock()
 
@@ -71,7 +99,15 @@ func (i *inmemClient) Subscribe(_ context.Context, topic *Topic, ch interface{})
 	return &Subscription{}, nil
 }
 
-func (i *inmemClient) Barrier(_ context.Context, state State, target int) (*Barrier, error) {
+func (i *InmemClient) Barrier(_ context.Context, state State, target int) (*Barrier, error) {
+	i.operations = append(i.operations, Operation{Kind: "barrier", Payload: struct {
+		State  State `json:"state"`
+		Target int   `json:"target"`
+	}{
+		State:  state,
+		Target: target,
+	}})
+
 	b := &Barrier{
 		C:      make(chan error, 1),
 		target: int64(target),
@@ -96,7 +132,13 @@ func (i *inmemClient) Barrier(_ context.Context, state State, target int) (*Barr
 	return b, nil
 }
 
-func (i *inmemClient) SignalEntry(_ context.Context, state State) (after int64, err error) {
+func (i *InmemClient) SignalEntry(_ context.Context, state State) (after int64, err error) {
+	i.operations = append(i.operations, Operation{Kind: "signal-entry", Payload: struct {
+		State State `json:"state"`
+	}{
+		State: state,
+	}})
+
 	i.Lock()
 	defer i.Unlock()
 
@@ -120,10 +162,16 @@ func (i *inmemClient) SignalEntry(_ context.Context, state State) (after int64, 
 	return v, nil
 }
 
-func (i *inmemClient) SignalEvent(_ context.Context, event *runtime.Event) error {
+func (i *InmemClient) SignalEvent(_ context.Context, event *runtime.Event) error {
+	i.operations = append(i.operations, Operation{Kind: "signal-event", Payload: struct {
+		Event *runtime.Event `json:"event"`
+	}{
+		Event: event,
+	}})
+
 	return nil
 }
 
-func (i *inmemClient) Close() error {
+func (i *InmemClient) Close() error {
 	return nil
 }
