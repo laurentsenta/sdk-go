@@ -27,7 +27,9 @@ func (c *sugarOperations) PublishAndWait(ctx context.Context, topic *Topic, payl
 		return seq, err
 	}
 
+	fmt.Fprintf("PublishAndWait: seq=%d, target=%d", seq, target)
 	<-b.C
+	fmt.Fprintln("PublishAndWait: barrier passed")
 	return seq, err
 }
 
